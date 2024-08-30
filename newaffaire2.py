@@ -21,7 +21,7 @@ class Application(tk.Tk):
             "Responsable Projet", "N° Devis", "N° d’Affaire", "Client", "DO",
             "Projet/Chantier", "Date de la Commande", "N° Commande", "Montant du Marché HT",
             "Observation", "Matière Prévue", "Sous-traitance Prévue",
-            "Heure Chantier", "Heures Chantier 25%", "Étude"
+            "Heure Chantier", "Heures Chantier 25%", "Étude", "Commentaire"
         ]
 
         self.entries = {}
@@ -40,11 +40,15 @@ class Application(tk.Tk):
         self.create_buttons(len(labels))
 
     def create_buttons(self, label_count):
-        tk.Button(self, text="Valider", command=self.save_data, fg="blue", width=15).grid(row=label_count, column=0, pady=10, sticky="ew")
-        tk.Button(self, text="Affaires", command=self.display_data, fg="green", width=15).grid(row=label_count, column=1, pady=10, sticky="ew")
-        tk.Button(self, text="Nouvel État", command=self.nouvel_etat, fg="black", width=15).grid(row=label_count, column=2, pady=10, sticky="ew")
-        tk.Button(self, text="Quitter", command=self.quit, fg="red", width=15).grid(row=label_count+1, column=1, pady=10, sticky="ew")
-        tk.Label(self, text="version 1 - YR", font=("Arial", 8)).grid(row=label_count+2, column=1, pady=5, sticky="e")
+        button_frame = tk.Frame(self)  # Crée un cadre pour contenir les boutons
+        button_frame.grid(row=label_count, column=1, padx=10, pady=10, sticky="e")  # Place le cadre à droite
+
+        tk.Button(button_frame, text="Valider", command=self.save_data, fg="blue", width=15).grid(row=0, column=0, pady=5, sticky="e")
+        tk.Button(button_frame, text="Affaires", command=self.display_data, fg="green", width=15).grid(row=1, column=0, pady=5, sticky="e")
+        tk.Button(button_frame, text="Nouvel État", command=self.nouvel_etat, fg="black", width=15).grid(row=2, column=0, pady=5, sticky="e")
+        tk.Button(button_frame, text="Quitter", command=self.quit, fg="red", width=15).grid(row=3, column=0, pady=5, sticky="e")
+
+        tk.Label(self, text="version 1 - YR", font=("Arial", 8)).grid(row=label_count + 2, column=1, pady=5, sticky="e")
 
     def load_affaires_en_cours(self):
         affaires = []
@@ -52,7 +56,7 @@ class Application(tk.Tk):
             workbook = load_workbook(self.file_name)
             sheet = workbook.active
             for row in sheet.iter_rows(min_row=2, values_only=True):
-                if (row[-3] == "Oui" or row[-2] == "Oui") and row[-1] != "Oui":
+                if (row[-5] == "Oui" or row[-4] == "Oui" or row[-3] == "Oui") and row[-2] != "Oui":
                     affaires.append((row[2], row[3], row[5]))
             workbook.close()
         return affaires
@@ -74,13 +78,15 @@ class Application(tk.Tk):
                 sheet = workbook.active
                 for row in sheet.iter_rows(min_row=2, max_row=sheet.max_row):
                     if row[2].value == affaire_var.get() and row[3].value == client_entry.get():
-                        row[-3].value = "Oui" if en_cours_var.get() else "Non"
+                        row[-5].value = "Oui" if litige_var.get() else "Non"
+                        row[-4].value = "Oui" if en_cours_var.get() else "Non"
                         if facturer_var.get():
+                            row[-3].value = "Oui"
                             row[-2].value = "Oui"
-                            row[-1].value = "Oui"
                         else:
-                            row[-2].value = "Oui" if terminee_var.get() else "Non"
-                            row[-1].value = "Non"
+                            row[-3].value = "Oui" if terminee_var.get() else "Non"
+                            row[-2].value = "Non"
+                        row[-1].value = commentaire_entry.get()
                         break
                 workbook.save(self.file_name)
                 workbook.close()
@@ -123,8 +129,15 @@ class Application(tk.Tk):
         facturer_var = tk.BooleanVar()
         tk.Checkbutton(new_window, text="Facturé", variable=facturer_var).grid(row=6, column=1, padx=10, pady=5, sticky=tk.W)
 
-        tk.Button(new_window, text="Sauvegarder", command=save_etat).grid(row=7, column=1, padx=10, pady=10, sticky="ew")
-        tk.Button(new_window, text="Fermer", command=new_window.destroy).grid(row=7, column=0, padx=10, pady=10, sticky="ew")
+        litige_var = tk.BooleanVar()
+        tk.Checkbutton(new_window, text="Litige", variable=litige_var).grid(row=7, column=1, padx=10, pady=5, sticky=tk.W)
+
+        tk.Label(new_window, text="Commentaire").grid(row=8, column=0, padx=10, pady=5, sticky=tk.W)
+        commentaire_entry = tk.Entry(new_window, width=40)
+        commentaire_entry.grid(row=8, column=1, padx=10, pady=5)
+
+        tk.Button(new_window, text="Sauvegarder", command=save_etat).grid(row=9, column=1, padx=10, pady=10, sticky="ew")
+        tk.Button(new_window, text="Fermer", command=new_window.destroy).grid(row=9, column=0, padx=10, pady=10, sticky="ew")
 
     def save_data(self):
         try:
@@ -169,9 +182,11 @@ class Application(tk.Tk):
                 data[key] = entry.get()
 
         data.update({
+            "Litige": "Non",
             "En cours": "Oui",
             "Terminé": "Non",
-            "Facturé": "Non"
+            "Facturé": "Non",
+            "Commentaire": ""
         })
 
         return data
@@ -197,18 +212,68 @@ class Application(tk.Tk):
 
         for row in sheet.iter_rows(min_row=2, max_row=sheet.max_row, values_only=True):
             item = tree.insert('', tk.END, values=row)
-            if row[-2] == "Oui" and row[-1] == "Oui":
+            if row[-5] == "Oui":  # Si litige est "Oui"
+                tree.item(item, tags=("litige",))
+                tree.tag_configure("litige", background="red")
+            elif row[-3] == "Oui" and row[-2] == "Oui":
                 tree.item(item, tags=("invoiced",))
                 tree.tag_configure("invoiced", background="lightgreen")
-            elif row[-2] == "Oui":
+            elif row[-3] == "Oui":
                 tree.item(item, tags=("completed",))
                 tree.tag_configure("completed", background="orange")
-            elif row[-3] == "Oui":
+            elif row[-4] == "Oui":
                 tree.item(item, tags=("in_progress",))
                 tree.tag_configure("in_progress", background="yellow")
 
         tree.pack(expand=True, fill='both')
+
+        # Bind the double-click event to the Treeview
+        tree.bind("<Double-1>", self.show_details)
+
         display_window.mainloop()
+
+    def show_details(self, event):
+        # Get the selected item
+        tree = event.widget
+        selected_item = tree.selection()[0]
+        values = tree.item(selected_item, "values")
+
+        # Create a new window to display the details
+        detail_window = tk.Toplevel(self)
+        detail_window.title("Détails de l'affaire")
+        detail_window.geometry("500x400")
+
+        # Create a canvas to hold the details and add a scrollbar
+        canvas = tk.Canvas(detail_window)
+        scrollbar = tk.Scrollbar(detail_window, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas)
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(
+                scrollregion=canvas.bbox("all")
+            )
+        )
+
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        labels = [
+            "Responsable Projet", "N° Devis", "N° d’Affaire", "Client", "DO",
+            "Projet/Chantier", "Date de la Commande", "N° Commande", "Montant du Marché HT",
+            "Observation", "Matière Prévue", "Sous-traitance Prévue",
+            "Heure Chantier", "Heures Chantier 25%", "Étude", "Litige", "En cours",
+            "Terminé", "Facturé", "Commentaire"
+        ]
+
+        for i, (label, value) in enumerate(zip(labels, values)):
+            tk.Label(scrollable_frame, text=f"{label} :").grid(row=i, column=0, padx=10, pady=5, sticky=tk.W)
+            tk.Label(scrollable_frame, text=value).grid(row=i, column=1, padx=10, pady=5, sticky=tk.W)
+
+        tk.Button(scrollable_frame, text="Fermer", command=detail_window.destroy).grid(row=len(labels), column=1, padx=10, pady=10, sticky="ew")
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
 
 
 if __name__ == "__main__":
